@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15
+    container_name: fantasy_xi_db
+    environment:
+      POSTGRES_DB: fantasy_xi_wizard
+      POSTGRES_USER: fpl_user
+      POSTGRES_PASSWORD: fpl_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - fantasy_xi_network
+
+  # FastAPI Backend
+  backend:
+    build: ./backend
+    container_name: fantasy_xi_backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://fpl_user:fpl_password@db:5432/fantasy_xi_wizard
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      FPL_API_BASE_URL: https://fantasy.premierleague.com/api
+    depends_on:
+      - db
+    volumes:
+      - ./backend:/app
+    networks:
+      - fantasy_xi_network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # React Frontend
+  frontend:
+    build: ./frontend
+    container_name: fantasy_xi_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      REACT_APP_API_BASE_URL: http://localhost:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - fantasy_xi_network
+    command: npm start
+
+  # Redis for caching (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: fantasy_xi_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - fantasy_xi_network
+
+volumes:
+  postgres_data:
+
+networks:
+  fantasy_xi_network:
+    driver: bridge
