@@ -153,5 +153,123 @@ class FPLAPIService:
                 return bootstrap.get('dream_team')
         return None
 
+    async def get_user_team(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """Get a user's current team"""
+        return await self._make_request(f"entry/{user_id}/")
+
+    async def get_user_picks(self, user_id: int, gameweek: Optional[int] = None) -> Optional[Dict[str, Any]]:
+        """Get a user's picks for a specific gameweek"""
+        if gameweek:
+            return await self._make_request(f"entry/{user_id}/event/{gameweek}/picks/")
+        else:
+            # Get current gameweek picks
+            current_gw = await self.get_current_gameweek()
+            if current_gw:
+                return await self._make_request(f"entry/{user_id}/event/{current_gw}/picks/")
+        return None
+
+    async def get_user_transfers(self, user_id: int) -> Optional[List[Dict[str, Any]]]:
+        """Get a user's transfer history"""
+        return await self._make_request(f"entry/{user_id}/transfers/")
+
+    async def get_user_history(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """Get a user's season history"""
+        return await self._make_request(f"entry/{user_id}/history/")
+
+    async def get_user_gameweek_history(self, user_id: int) -> Optional[List[Dict[str, Any]]]:
+        """Get a user's gameweek-by-gameweek history"""
+        history_data = await self.get_user_history(user_id)
+        if history_data:
+            return history_data.get('current', [])
+        return None
+
+    async def get_user_team_with_details(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """Get user's team with full player details"""
+        try:
+            # Get user's basic info and current picks
+            user_team = await self.get_user_team(user_id)
+            user_picks = await self.get_user_picks(user_id)
+            user_transfers = await self.get_user_transfers(user_id)
+
+            if not user_team:
+                return None
+
+            # Handle pre-season scenario (no picks available yet)
+            if not user_picks:
+                logger.info(f"No picks available for user {user_id} - likely pre-season")
+                return {
+                    'user_info': {
+                        'id': user_team.get('id'),
+                        'name': f"{user_team.get('player_first_name', '')} {user_team.get('player_last_name', '')}",
+                        'team_name': user_team.get('name', ''),
+                        'overall_rank': user_team.get('summary_overall_rank'),
+                        'total_points': user_team.get('summary_overall_points'),
+                        'gameweek_points': user_team.get('summary_event_points'),
+                        'years_active': user_team.get('years_active', 0)
+                    },
+                    'squad': [],
+                    'bank': 100.0,  # Default starting budget
+                    'free_transfers': 0,
+                    'transfers_made': 0,
+                    'gameweek': 0,
+                    'recent_transfers': [],
+                    'pre_season': True
+                }
+
+            # Get all players data to map IDs to details
+            bootstrap = await self.get_bootstrap_static()
+            if not bootstrap:
+                return None
+
+            players_data = {p['id']: p for p in bootstrap.get('elements', [])}
+            teams_data = {t['id']: t for t in bootstrap.get('teams', [])}
+
+            # Build detailed squad
+            squad = []
+            for pick in user_picks.get('picks', []):
+                player_id = pick['element']
+                player_data = players_data.get(player_id)
+                if player_data:
+                    team_data = teams_data.get(player_data['team'])
+                    squad.append({
+                        'player_id': player_id,
+                        'player_name': f"{player_data['first_name']} {player_data['second_name']}",
+                        'web_name': player_data['web_name'],
+                        'position': self._get_position_name(player_data['element_type']),
+                        'team': team_data['name'] if team_data else 'Unknown',
+                        'price': player_data['now_cost'] / 10,
+                        'total_points': player_data['total_points'],
+                        'form': player_data['form'],
+                        'is_captain': pick.get('is_captain', False),
+                        'is_vice_captain': pick.get('is_vice_captain', False),
+                        'multiplier': pick.get('multiplier', 1)
+                    })
+
+            return {
+                'user_info': {
+                    'id': user_team.get('id'),
+                    'name': f"{user_team.get('player_first_name', '')} {user_team.get('player_last_name', '')}",
+                    'team_name': user_team.get('name', ''),
+                    'overall_rank': user_team.get('summary_overall_rank'),
+                    'total_points': user_team.get('summary_overall_points'),
+                    'gameweek_points': user_team.get('summary_event_points')
+                },
+                'squad': squad,
+                'bank': user_picks.get('entry_history', {}).get('bank', 0) / 10,
+                'free_transfers': user_picks.get('entry_history', {}).get('event_transfers', 0),
+                'transfers_made': len(user_transfers) if user_transfers else 0,
+                'gameweek': user_picks.get('entry_history', {}).get('event'),
+                'recent_transfers': user_transfers[-5:] if user_transfers else []  # Last 5 transfers
+            }
+
+        except Exception as e:
+            logger.error(f"Error fetching user team details: {e}")
+            return None
+
+    def _get_position_name(self, element_type: int) -> str:
+        """Convert element type to position name"""
+        positions = {1: 'GK', 2: 'DEF', 3: 'MID', 4: 'FWD'}
+        return positions.get(element_type, 'Unknown')
+
 # Singleton instance
 fpl_api = FPLAPIService()

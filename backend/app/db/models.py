@@ -173,49 +173,18 @@ class PlayerGameweekStats(Base):
     player = relationship("Player", back_populates="gameweek_stats")
     fixture = relationship("Fixture")
 
-class HistoricalPlayerStats(Base):
-    __tablename__ = "historical_player_stats"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    player_name = Column(String(200), nullable=False, index=True)
-    season = Column(String(10), nullable=False, index=True)
-    team_name = Column(String(100), nullable=False)
-    position = Column(String(10), nullable=False)
-    
-    # Season totals
-    total_points = Column(Integer, default=0)
-    minutes = Column(Integer, default=0)
-    goals_scored = Column(Integer, default=0)
-    assists = Column(Integer, default=0)
-    clean_sheets = Column(Integer, default=0)
-    goals_conceded = Column(Integer, default=0)
-    yellow_cards = Column(Integer, default=0)
-    red_cards = Column(Integer, default=0)
-    saves = Column(Integer, default=0)
-    bonus = Column(Integer, default=0)
-    
-    # Averages
-    points_per_game = Column(Float, default=0.0)
-    goals_per_game = Column(Float, default=0.0)
-    assists_per_game = Column(Float, default=0.0)
-    
-    # Price info
-    start_cost = Column(Float, default=0.0)
-    end_cost = Column(Float, default=0.0)
-    
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-
 # Historical Data Models for AI Intelligence
 
 class HistoricalPlayerStats(Base):
     """Historical player performance data for AI predictions"""
     __tablename__ = "historical_player_stats"
-    __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
-    player_id = Column(Integer, ForeignKey("players.id", ondelete="CASCADE"), nullable=False)
-    season = Column(String(10), nullable=False)  # '2024-25', '2023-24'
+    player_id = Column(Integer, ForeignKey("players.id", ondelete="CASCADE"), nullable=True)  # Allow null for legacy data
+    player_name = Column(String(200), nullable=False, index=True)  # Keep for legacy compatibility
+    season = Column(String(10), nullable=False, index=True)  # '2024-25', '2023-24'
+    team_name = Column(String(100), nullable=False)
+    position = Column(String(10), nullable=False)
 
     # Performance Stats
     total_points = Column(Integer, default=0)
@@ -223,14 +192,23 @@ class HistoricalPlayerStats(Base):
     assists = Column(Integer, default=0)
     clean_sheets = Column(Integer, default=0)
     minutes = Column(Integer, default=0)
+    goals_conceded = Column(Integer, default=0)
+    yellow_cards = Column(Integer, default=0)
+    red_cards = Column(Integer, default=0)
+    saves = Column(Integer, default=0)
+    bonus = Column(Integer, default=0)
 
     # Advanced Stats
     form = Column(Float, default=0.0)
     points_per_game = Column(Float, default=0.0)
+    goals_per_game = Column(Float, default=0.0)
+    assists_per_game = Column(Float, default=0.0)
     expected_goals = Column(Float, default=0.0)
     expected_assists = Column(Float, default=0.0)
 
     # Economic Stats
+    start_cost = Column(Float, default=0.0)  # Legacy field
+    end_cost = Column(Float, default=0.0)    # Legacy field
     price_start = Column(Float, default=0.0)
     price_end = Column(Float, default=0.0)
     price_change = Column(Float, default=0.0)
@@ -246,7 +224,6 @@ class HistoricalPlayerStats(Base):
     # Constraints
     __table_args__ = (
         UniqueConstraint('player_id', 'season', name='uq_player_season'),
-        {'extend_existing': True}
     )
 
 

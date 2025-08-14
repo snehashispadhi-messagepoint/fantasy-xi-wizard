@@ -20,6 +20,17 @@ import { apiService } from '../services/apiService';
 const Recommendations = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [showChat, setShowChat] = useState(false);
+  const [fplUserId, setFplUserId] = useState('');
+  const [fplTransferRec, setFplTransferRec] = useState(null);
+  const [fplTransferLoading, setFplTransferLoading] = useState(false);
+  const [manualSquad, setManualSquad] = useState('');
+  const [manualSquadLoading, setManualSquadLoading] = useState(false);
+  const [squadBudget, setSquadBudget] = useState(100.0);
+  const [squadFormation, setSquadFormation] = useState('3-5-2');
+  const [customSquadRec, setCustomSquadRec] = useState(null);
+  const [customSquadLoading, setCustomSquadLoading] = useState(false);
+  const [customCaptainRec, setCustomCaptainRec] = useState(null);
+  const [customCaptainLoading, setCustomCaptainLoading] = useState(false);
 
   // Fetch different types of recommendations
   const { data: squadRec, isLoading: squadLoading } = useQuery(
@@ -47,9 +58,19 @@ const Recommendations = () => {
   );
 
   // Manual trigger functions for generating recommendations
-  const handleGenerateSquad = () => {
-    // Trigger squad recommendation generation
-    console.log('Generating squad recommendation...');
+  const handleGenerateSquad = async () => {
+    setCustomSquadLoading(true);
+    setCustomSquadRec(null);
+
+    try {
+      const response = await apiService.getSquadRecommendation(squadBudget, squadFormation, 3);
+      setCustomSquadRec(response);
+    } catch (error) {
+      console.error('Error generating squad recommendation:', error);
+      // You could add a toast notification here
+    } finally {
+      setCustomSquadLoading(false);
+    }
   };
 
   const handleGenerateTransfer = () => {
@@ -57,14 +78,61 @@ const Recommendations = () => {
     console.log('Generating transfer recommendation...');
   };
 
-  const handleGenerateCaptain = () => {
-    // Trigger captain recommendation generation
-    console.log('Generating captain recommendation...');
+  const handleGenerateCaptain = async () => {
+    setCustomCaptainLoading(true);
+    setCustomCaptainRec(null);
+
+    try {
+      const response = await apiService.getCaptainRecommendation(null, 1);
+      setCustomCaptainRec(response);
+    } catch (error) {
+      console.error('Error generating captain recommendation:', error);
+      // You could add a toast notification here
+    } finally {
+      setCustomCaptainLoading(false);
+    }
   };
 
   const handleGenerateChip = () => {
     // Trigger chip recommendation generation
     console.log('Generating chip recommendation...');
+  };
+
+  const handleAnalyzeFPLTeam = async () => {
+    if (!fplUserId) return;
+
+    setFplTransferLoading(true);
+    setFplTransferRec(null);
+
+    try {
+      const response = await apiService.getFPLTransferRecommendation(parseInt(fplUserId), 3);
+      setFplTransferRec(response);
+    } catch (error) {
+      console.error('Error fetching FPL transfer recommendations:', error);
+      // You could add a toast notification here
+    } finally {
+      setFplTransferLoading(false);
+    }
+  };
+
+  const handleAnalyzeManualSquad = async () => {
+    if (!manualSquad.trim()) return;
+
+    setManualSquadLoading(true);
+    setFplTransferRec(null);
+
+    try {
+      // Parse manual squad input
+      const playerNames = manualSquad.split('\n').filter(name => name.trim()).map(name => name.trim());
+
+      const response = await apiService.analyzeManualSquad(playerNames, 3);
+      setFplTransferRec(response);
+    } catch (error) {
+      console.error('Error analyzing manual squad:', error);
+      // You could add a toast notification here
+    } finally {
+      setManualSquadLoading(false);
+    }
   };
 
   const tabs = [
@@ -145,16 +213,65 @@ const Recommendations = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-white">Squad Recommendations</h2>
-        <Button variant="primary" size="sm">
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={handleGenerateSquad}
+          loading={customSquadLoading}
+        >
           Generate New Squad
         </Button>
       </div>
 
-      {squadLoading ? (
+      {/* Squad Configuration */}
+      <Card title="Squad Configuration" subtitle="Customize your 15-player squad parameters">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-dark-300 mb-2">
+              Budget (£m)
+            </label>
+            <input
+              type="number"
+              min="50"
+              max="100"
+              step="0.5"
+              className="w-full px-3 py-2 bg-dark-800 border border-dark-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              value={squadBudget}
+              onChange={(e) => setSquadBudget(parseFloat(e.target.value))}
+            />
+            <p className="text-xs text-dark-400 mt-1">
+              Total budget for 15 players
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-dark-300 mb-2">
+              Squad Structure
+            </label>
+            <div className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-lg text-dark-300">
+              2 GK • 5 DEF • 5 MID • 3 FWD
+            </div>
+            <p className="text-xs text-dark-400 mt-1">
+              Standard FPL squad composition
+            </p>
+          </div>
+          <div className="flex items-end">
+            <Button
+              variant="primary"
+              onClick={handleGenerateSquad}
+              loading={customSquadLoading}
+              className="w-full"
+            >
+              Generate Optimal Squad
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      {(squadLoading || customSquadLoading) ? (
         <Card><LoadingSpinner size="lg" text="Analyzing optimal squad combinations..." /></Card>
-      ) : squadRec ? (
+      ) : (customSquadRec || squadRec) ? (
         <AIRecommendationCard
-          recommendation={squadRec}
+          recommendation={customSquadRec || squadRec}
           type="squad"
           onAccept={() => console.log('Apply squad recommendation')}
           onViewDetails={() => console.log('View squad details')}
@@ -183,12 +300,76 @@ const Recommendations = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-white">Transfer Recommendations</h2>
-        <Button variant="primary" size="sm">
-          Analyze My Team
-        </Button>
       </div>
 
-      {transferLoading ? (
+      {/* Manual Team Input */}
+      <Card title="Analyze Your FPL Team" subtitle="Enter your current squad to get personalized transfer recommendations">
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-dark-300 mb-2">
+                FPL User ID (Optional)
+              </label>
+              <input
+                type="number"
+                placeholder="e.g., 1678712"
+                className="w-full px-3 py-2 bg-dark-800 border border-dark-600 rounded-lg text-white placeholder-dark-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                value={fplUserId}
+                onChange={(e) => setFplUserId(e.target.value)}
+              />
+              <p className="text-xs text-dark-400 mt-1">
+                Note: FPL API requires authentication for private team data
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-dark-300 mb-2">
+                Current Squad (Manual Input)
+              </label>
+              <textarea
+                placeholder="Enter your 15 players, one per line:&#10;Haaland&#10;Salah&#10;Palmer&#10;..."
+                className="w-full px-3 py-2 bg-dark-800 border border-dark-600 rounded-lg text-white placeholder-dark-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                rows="4"
+                value={manualSquad}
+                onChange={(e) => setManualSquad(e.target.value)}
+              />
+              <p className="text-xs text-dark-400 mt-1">
+                Enter player names (web names work best, e.g., "M.Salah")
+              </p>
+            </div>
+          </div>
+
+          <div className="flex space-x-3">
+            <Button
+              variant="primary"
+              onClick={handleAnalyzeFPLTeam}
+              loading={fplTransferLoading}
+              disabled={!fplUserId && !manualSquad.trim()}
+            >
+              {fplUserId ? 'Try FPL API' : 'Analyze Manual Squad'}
+            </Button>
+            {manualSquad.trim() && (
+              <Button
+                variant="secondary"
+                onClick={handleAnalyzeManualSquad}
+                loading={manualSquadLoading}
+              >
+                Analyze Manual Squad
+              </Button>
+            )}
+          </div>
+        </div>
+      </Card>
+
+      {fplTransferLoading ? (
+        <Card><LoadingSpinner size="lg" text="Fetching your FPL team and analyzing transfer opportunities..." /></Card>
+      ) : fplTransferRec ? (
+        <AIRecommendationCard
+          recommendation={fplTransferRec}
+          type="transfer"
+          onAccept={() => console.log('Apply FPL transfer recommendation')}
+          onViewDetails={() => console.log('View FPL transfer details')}
+        />
+      ) : transferLoading ? (
         <Card><LoadingSpinner size="lg" text="Analyzing transfer opportunities..." /></Card>
       ) : transferRec ? (
         <AIRecommendationCard
@@ -198,14 +379,14 @@ const Recommendations = () => {
           onViewDetails={() => console.log('View transfer details')}
         />
       ) : (
-        <Card title="Transfer Analysis" subtitle="Smart transfer suggestions based on form and fixtures">
+        <Card title="Alternative: Generic Transfer Analysis" subtitle="Smart transfer suggestions based on form and fixtures">
           <div className="text-center py-8">
             <ArrowRightIcon className="h-12 w-12 text-primary-500 mx-auto mb-4" />
             <p className="text-dark-400 mb-4">
-              Get personalized transfer recommendations based on your current squad
+              Get general transfer recommendations based on current player form and fixtures
             </p>
             <Button
-              variant="primary"
+              variant="secondary"
               onClick={handleGenerateTransfer}
               loading={transferLoading}
             >
@@ -219,28 +400,38 @@ const Recommendations = () => {
 
   const renderCaptainTab = () => (
     <div className="space-y-6">
-      <h2 className="text-xl font-bold text-white">Captain Recommendations</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-white">Captain Recommendations</h2>
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={handleGenerateCaptain}
+          loading={customCaptainLoading}
+        >
+          Generate Fresh Analysis
+        </Button>
+      </div>
 
-      {captainLoading ? (
-        <Card><LoadingSpinner size="lg" text="Analyzing captaincy options..." /></Card>
-      ) : captainRec ? (
+      {(captainLoading || customCaptainLoading) ? (
+        <Card><LoadingSpinner size="lg" text="Analyzing captaincy options with current FPL news..." /></Card>
+      ) : (customCaptainRec || captainRec) ? (
         <AIRecommendationCard
-          recommendation={captainRec}
+          recommendation={customCaptainRec || captainRec}
           type="captain"
           onAccept={() => console.log('Apply captain recommendation')}
           onViewDetails={() => console.log('View captain analysis')}
         />
       ) : (
-        <Card title="Captain Analysis" subtitle="AI-powered captaincy recommendations">
+        <Card title="Captain Analysis" subtitle="AI-powered captaincy recommendations with current FPL news">
           <div className="text-center py-8">
             <TrophyIcon className="h-12 w-12 text-primary-500 mx-auto mb-4" />
             <p className="text-dark-400 mb-4">
-              Get intelligent captain picks based on fixtures, form, and ownership
+              Get intelligent captain picks based on fixtures, form, ownership, and current FPL news
             </p>
             <Button
               variant="primary"
               onClick={handleGenerateCaptain}
-              loading={captainLoading}
+              loading={customCaptainLoading}
             >
               Get Captain Recommendation
             </Button>

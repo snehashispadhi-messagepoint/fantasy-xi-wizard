@@ -153,12 +153,6 @@ export const apiService = {
     return api.get('/stats/top-performers', { params });
   },
 
-  getFormTable: (gameweeks = 5) => {
-    return api.get('/stats/form-table', {
-      params: { gameweeks }
-    });
-  },
-  
   getFormTable: (gameweeks = 5, position = null) => {
     return api.get('/stats/form-table', {
       params: { gameweeks, position }
@@ -181,6 +175,18 @@ export const apiService = {
       budget,
       free_transfers: freeTransfers,
       gameweeks
+    });
+  },
+
+  getFPLTransferRecommendation: (userId, gameweeks = 3) => {
+    return api.post(`/recommendations/fpl-transfers/${userId}`, null, {
+      params: { gameweeks }
+    });
+  },
+
+  analyzeManualSquad: (playerNames, gameweeks = 3) => {
+    return api.post('/recommendations/manual-squad-analysis', playerNames, {
+      params: { gameweeks }
     });
   },
 

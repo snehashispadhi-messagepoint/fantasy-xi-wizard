@@ -149,6 +149,7 @@ async def get_ai_transfer_recommendations(
 ):
     """Get intelligent transfer recommendations using AI analysis"""
     try:
+        ai_service = AIService(db=db)
         recommendation = await ai_service.get_transfer_recommendations(
             current_squad=request.current_squad,
             budget=request.budget,
@@ -158,6 +159,78 @@ async def get_ai_transfer_recommendations(
         return recommendation
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/fpl-transfers/{user_id}")
+async def get_fpl_user_transfer_recommendations(
+    user_id: int,
+    gameweeks: int = 3,
+    db: Session = Depends(get_db)
+):
+    """Get intelligent transfer recommendations for an FPL user using their actual team and transfer history"""
+    try:
+        from app.services.fpl_api_service import fpl_api
+
+        # Fetch user's actual FPL team
+        user_team_data = await fpl_api.get_user_team_with_details(user_id)
+        if not user_team_data:
+            raise HTTPException(status_code=404, detail="FPL user not found or team data unavailable")
+
+        # Use AI service with LLM for intelligent analysis
+        ai_service = AIService(db=db)
+        recommendation = await ai_service.get_fpl_transfer_recommendations(
+            user_team_data=user_team_data,
+            gameweeks=gameweeks
+        )
+        return recommendation
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating transfer recommendations: {str(e)}")
+
+@router.post("/manual-squad-analysis")
+async def analyze_manual_squad(
+    player_names: List[str],
+    gameweeks: int = 3,
+    db: Session = Depends(get_db)
+):
+    """Analyze a manually input squad and provide transfer recommendations"""
+    try:
+        from app.services.player_matching_service import PlayerMatchingService
+
+        # Match player names to database players
+        matching_service = PlayerMatchingService(db)
+        matched_players = await matching_service.match_player_names(player_names)
+
+        if not matched_players:
+            raise HTTPException(status_code=400, detail="No players could be matched from the provided names")
+
+        # Create mock user team data
+        user_team_data = {
+            'user_info': {
+                'name': 'Manual Input User',
+                'team_name': 'Manual Squad',
+                'id': 0
+            },
+            'squad': matched_players,
+            'bank': 5.0,  # Assume some budget available
+            'free_transfers': 1,
+            'transfers_made': 0,
+            'gameweek': 1,
+            'recent_transfers': [],
+            'pre_season': False
+        }
+
+        # Use AI service for analysis
+        ai_service = AIService(db=db)
+        recommendation = await ai_service.get_fpl_transfer_recommendations(
+            user_team_data=user_team_data,
+            gameweeks=gameweeks
+        )
+        return recommendation
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error analyzing manual squad: {str(e)}")
 
 class CaptainRequest(BaseModel):
     squad: Optional[List[Dict[str, Any]]] = None
